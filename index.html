@@ -268,6 +268,24 @@ h1 span{color:var(--gold3)}
 .ann-cat-tbl tr:nth-child(even) td{background:#F7F4EF}
 .ann-cat-tbl .ann-tot td{background:var(--sage);color:#fff;font-size:14px}
 @media(max-width:700px){h1{font-size:20px}.mtab{padding:6px 9px;font-size:12px}#page{padding:14px 10px 60px}}
+/* PASSWORD SCREEN */
+#pwd-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#1a3a2a,#2D6A4F 60%,#1B4332);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column}
+#pwd-box{background:#fff;border-radius:16px;padding:40px 44px;max-width:380px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.3);text-align:center}
+#pwd-box .pb-title{font-size:10px;letter-spacing:4px;text-transform:uppercase;color:var(--gold2);margin-bottom:8px}
+#pwd-box h2{font-size:22px;font-weight:normal;color:var(--sage);margin-bottom:6px}
+#pwd-box .pb-sub{font-size:13px;color:#888;margin-bottom:28px}
+#pwd-box .pb-lock{font-size:48px;margin-bottom:16px}
+#pwd-input{width:100%;padding:13px 16px;border:2px solid var(--sage4);border-radius:8px;font-size:18px;font-family:'Courier New',monospace;text-align:center;letter-spacing:4px;outline:none;margin-bottom:10px;transition:border-color 0.2s}
+#pwd-input:focus{border-color:var(--sage)}
+#pwd-input.shake{animation:shake 0.4s ease}
+#pwd-btn{width:100%;padding:13px;background:var(--sage);color:#fff;border:none;border-radius:8px;font-size:15px;font-family:inherit;cursor:pointer;font-weight:bold;letter-spacing:0.5px;transition:background 0.2s;margin-bottom:10px}
+#pwd-btn:hover{background:var(--sage2)}
+#pwd-error{color:#b80000;font-size:13px;min-height:20px;margin-bottom:4px}
+#pwd-hint{font-size:11px;color:#bbb;margin-top:8px}
+#pwd-change-wrap{margin-top:12px;padding-top:12px;border-top:1px solid #eee}
+#pwd-change-wrap a{font-size:12px;color:var(--sage3);cursor:pointer;text-decoration:none}
+#pwd-change-wrap a:hover{text-decoration:underline}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
 </style>
 </head>
 <body>
@@ -293,7 +311,23 @@ h1 span{color:var(--gold3)}
     <div id="month-tabs"></div>
   </div>
 </div>
-<div id="app"></div>
+<div id="pwd-screen">
+  <div id="pwd-box">
+    <div class="pb-lock">&#128274;</div>
+    <div class="pb-title">Family Household Finance</div>
+    <h2>Rodney &amp; Pearl Budget</h2>
+    <div class="pb-sub">Please enter your password to continue</div>
+    <input type="password" id="pwd-input" placeholder="&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;" maxlength="30"
+      onkeydown="if(event.key==='Enter')checkPassword()"/>
+    <div id="pwd-error"></div>
+    <button id="pwd-btn" onclick="checkPassword()">&#128275; Unlock</button>
+    <div id="pwd-hint"></div>
+    <div id="pwd-change-wrap">
+      <a onclick="showChangePassword()">Change password</a>
+    </div>
+  </div>
+</div>
+<div id="app" style="display:none"></div>
 
 <script>
 var MONTHS12=["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -1044,7 +1078,109 @@ function exportCSV(){
   a.download="Budget_"+yr+"_"+mLbl.replace(/ /g,"_")+".csv";a.click();
 }
 
-render();
+/* ================================================================
+   PASSWORD PROTECTION
+   Password is stored as a simple hash in localStorage.
+   Default password: Budget2026
+   Change it any time via the "Change password" link.
+   ================================================================ */
+
+var PWD_KEY="rp_pwd_v1";
+var UNLOCK_KEY="rp_unlocked";
+
+/* Simple hash function - not cryptographic but sufficient for privacy */
+function simpleHash(str){
+  var hash=0;
+  for(var i=0;i<str.length;i++){
+    var ch=str.charCodeAt(i);
+    hash=((hash<<5)-hash)+ch;
+    hash=hash&hash;
+  }
+  return String(hash);
+}
+
+function getStoredHash(){
+  return localStorage.getItem(PWD_KEY)||simpleHash("Budget2026");
+}
+
+function isUnlocked(){
+  /* Check session unlock - stays unlocked for current browser session */
+  return sessionStorage.getItem(UNLOCK_KEY)==="1";
+}
+
+function checkPassword(){
+  var inp=document.getElementById("pwd-input");
+  var err=document.getElementById("pwd-error");
+  var val=inp?inp.value:"";
+  if(!val){err.textContent="Please enter a password.";return;}
+  if(simpleHash(val)===getStoredHash()){
+    /* Correct — unlock for this session */
+    sessionStorage.setItem(UNLOCK_KEY,"1");
+    var screen=document.getElementById("pwd-screen");
+    var app=document.getElementById("app");
+    if(screen)screen.style.display="none";
+    if(app)app.style.display="block";
+    render();
+  }else{
+    err.textContent="Incorrect password. Please try again.";
+    inp.value="";
+    inp.classList.add("shake");
+    setTimeout(function(){inp.classList.remove("shake");},400);
+    inp.focus();
+  }
+}
+
+function showChangePassword(){
+  var current=prompt("Enter your CURRENT password to verify:");
+  if(current===null)return;
+  if(simpleHash(current)!==getStoredHash()){
+    alert("Incorrect current password.");return;
+  }
+  var np1=prompt("Enter your NEW password (at least 6 characters):");
+  if(!np1||np1.length<6){alert("Password must be at least 6 characters.");return;}
+  var np2=prompt("Confirm your new password:");
+  if(np1!==np2){alert("Passwords do not match. Please try again.");return;}
+  localStorage.setItem(PWD_KEY,simpleHash(np1));
+  alert("Password changed successfully!\n\nYour new password is: "+np1+"\n\nPlease remember it - there is no recovery option.");
+}
+
+function addChangePasswordToMenu(){
+  /* Add change password option to header */
+  var actions=document.getElementById? document.getElementById("hdr-actions"):null;
+  if(actions){
+    var btn=document.createElement("button");
+    btn.className="hbtn";
+    btn.innerHTML="&#128275; Password";
+    btn.title="Change your login password";
+    btn.onclick=showChangePassword;
+    actions.appendChild(btn);
+  }
+}
+
+/* ── Boot sequence ── */
+function boot(){
+  var hint=document.getElementById("pwd-hint");
+  /* Show default password hint on first visit */
+  if(!localStorage.getItem(PWD_KEY)){
+    if(hint)hint.textContent="Default password: Budget2026";
+  }
+  if(isUnlocked()){
+    /* Already unlocked this session — skip password screen */
+    var screen=document.getElementById("pwd-screen");
+    var app=document.getElementById("app");
+    if(screen)screen.style.display="none";
+    if(app)app.style.display="block";
+    render();
+    addChangePasswordToMenu();
+  }else{
+    /* Show password screen */
+    var inp=document.getElementById("pwd-input");
+    if(inp)setTimeout(function(){inp.focus();},100);
+  }
+}
+
+boot();
+
 </script>
 </body>
 </html>
